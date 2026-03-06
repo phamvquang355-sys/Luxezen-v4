@@ -24,6 +24,7 @@ export const generateVideoFromImage = async (
       throw new Error("API Key is missing. Please select a Google Cloud Project with billing enabled.");
     }
 
+
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     // Parse Data URI to get mimeType and base64 data
@@ -34,10 +35,41 @@ export const generateVideoFromImage = async (
     const mimeType = matches[1];
     const imageBytes = matches[2];
 
+    // Helper function for retry logic
+    const generateVideosWithRetry = async (params: any, retries: number = 5, delay: number = 4000): Promise<any> => {
+      try {
+        return await ai.models.generateVideos(params);
+      } catch (error: any) {
+        if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes("503") || error?.message?.includes("overloaded"))) {
+          const jitter = Math.random() * 1000;
+          const waitTime = delay + jitter;
+          console.warn(`Veo API 503 error (generate). Retrying in ${Math.round(waitTime)}ms... (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          return generateVideosWithRetry(params, retries - 1, delay * 2);
+        }
+        throw error;
+      }
+    };
+
+    const getVideosOperationWithRetry = async (params: any, retries: number = 5, delay: number = 4000): Promise<any> => {
+      try {
+        return await ai.operations.getVideosOperation(params);
+      } catch (error: any) {
+        if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes("503") || error?.message?.includes("overloaded"))) {
+          const jitter = Math.random() * 1000;
+          const waitTime = delay + jitter;
+          console.warn(`Veo API 503 error (poll). Retrying in ${Math.round(waitTime)}ms... (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          return getVideosOperationWithRetry(params, retries - 1, delay * 2);
+        }
+        throw error;
+      }
+    };
+
     // Veo 3.1 Fast Generate Preview
     // Supported aspect ratios: '16:9' (landscape) or '9:16' (portrait)
     // Resolution: '720p' or '1080p'
-    let operation = await ai.models.generateVideos({
+    let operation = await generateVideosWithRetry({
       model: 'veo-3.1-fast-generate-preview',
       prompt: fullPrompt,
       image: {
@@ -56,7 +88,7 @@ export const generateVideoFromImage = async (
     // Poll for completion
     while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5 seconds
-      operation = await ai.operations.getVideosOperation({ operation: operation });
+      operation = await getVideosOperationWithRetry({ operation: operation });
       console.log("Polling status:", operation.metadata?.state);
     }
 

@@ -8,6 +8,29 @@ const WEDDING_MATERIALS_KEYWORDS = {
   lighting: "cinematic volumetric lighting, warm amber ambient glow, professional stage spotlights, Tyndall effect"
 };
 
+/**
+ * Helper function to retry Gemini API calls on 503 errors with exponential backoff.
+ */
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  params: any,
+  retries: number = 5,
+  delay: number = 4000
+): Promise<any> {
+  try {
+    return await ai.models.generateContent(params);
+  } catch (error: any) {
+    if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes("503") || error?.message?.includes("overloaded"))) {
+      const jitter = Math.random() * 1000; // Add up to 1s jitter
+      const waitTime = delay + jitter;
+      console.warn(`Gemini API 503 error. Retrying in ${Math.round(waitTime)}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return generateContentWithRetry(ai, params, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
 // ... (keep all existing constants and helpers like resizeAndCompressImage, getEmpowermentPrompt, generatePromptFromImageAndText, generateRenderPrompt) ...
 // 1. Thêm hằng số định nghĩa quy tắc bố cục nghiêm ngặt
 const COMPOSITION_RULE_PROMPT = `
@@ -140,7 +163,7 @@ export const generatePromptFromImageAndText = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3-flash-preview',
       contents: {
         parts: [
@@ -245,7 +268,7 @@ export const generateWeddingRender = async (
       `;
 
       try {
-          const reasoningResponse = await ai.models.generateContent({
+          const reasoningResponse = await generateContentWithRetry(ai, {
             model: 'gemini-3-flash-preview',
             contents: {
                 parts: [
@@ -279,7 +302,7 @@ export const generateWeddingRender = async (
     const count = options.imageCount || 1;
 
     for (let i = 0; i < count; i++) {
-        const renderResponse = await ai.models.generateContent({
+        const renderResponse = await generateContentWithRetry(ai, {
           model: 'gemini-3-pro-image-preview',
           contents: {
             parts: [
@@ -333,7 +356,7 @@ export const generateHighQualityImage = async (
     : "16:9";
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-image-preview', 
       contents: { parts: contentsParts },
       config: {
@@ -396,7 +419,7 @@ export const generateAdvancedEdit = async (
   parts.push({ text: userPrompt });
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-image-preview', 
       contents: { parts: parts }, 
       config: { systemInstruction: systemInstruction }
@@ -421,7 +444,7 @@ export const detectSimilarObjects = async (
   if (!process.env.API_KEY) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3-flash-preview', 
       contents: {
         parts: [
@@ -465,7 +488,7 @@ export const generateSketch = async (
   const modelName = 'gemini-2.5-flash-image';
   const finalPrompt = `Professional high-speed ${style} sketch conversion...`;
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: modelName,
       contents: {
         parts: [
@@ -557,7 +580,7 @@ export const generateIdeaStructure = async (
     for (let i = 0; i < imageCount; i++) {
         if (onStatusUpdate && imageCount > 1) onStatusUpdate(`Đang tạo khung sườn ${i + 1}/${imageCount}...`);
         
-        const response = await ai.models.generateContent({
+        const response = await generateContentWithRetry(ai, {
             model: 'gemini-2.5-flash-image', 
             contents: { parts: parts },
             config: {
@@ -615,7 +638,7 @@ export const generateIdeaDecor = async (
     for (let i = 0; i < imageCount; i++) {
         if (onStatusUpdate && imageCount > 1) onStatusUpdate(`Đang tạo phương án ${i + 1}/${imageCount}...`);
         
-        const response = await ai.models.generateContent({
+        const response = await generateContentWithRetry(ai, {
             model: modelName,
             contents: { parts: parts },
             config: {
@@ -682,7 +705,7 @@ export const autoGenerateAxonometric = async (
 
   try {
     // Gọi Gemini 3 Pro (hỗ trợ phân tích ảnh và văn bản phức tạp)
-    const analysisResponse = await ai.models.generateContent({
+    const analysisResponse = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-preview', 
       contents: [{ role: 'user', parts: contents }],
       config: {
@@ -700,7 +723,7 @@ export const autoGenerateAxonometric = async (
     // ==========================================
     // BƯỚC 2: TẠO ẢNH TỪ PROMPT SINH TỰ ĐỘNG
     // ==========================================
-    const imageResponse = await ai.models.generateContent({
+    const imageResponse = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-image-preview', 
       contents: [{ text: generatedPrompt }]
     });
@@ -743,7 +766,7 @@ export const generateAxonometricView = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [
@@ -819,7 +842,7 @@ Return ONLY the raw generated image, no markdown, no JSON.
   });
 
   try {
-    const finalImageResponse = await ai.models.generateContent({
+    const finalImageResponse = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-image-preview',
       contents: contents
     });
@@ -854,7 +877,7 @@ export const generateViewSync = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [
