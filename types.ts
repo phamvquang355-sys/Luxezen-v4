@@ -53,6 +53,7 @@ export enum AppState {
 export enum Tool {
   RENDER = 'render',
   AXONOMETRIC = 'axonometric', // Tool cũ (có mặt bằng)
+  PANORAMIC_AXO = 'panoramic_axo', // <-- TOOL MỚI (Chỉ từ ảnh góc)
   IDEA_GENERATOR = 'idea_generator',
   UPSCALE = 'upscale',
   ADVANCED_EDIT = 'advanced_edit',
@@ -168,7 +169,31 @@ export interface AxonometricProps {
   onReset: () => void;
 }
 
+// Thêm interface mới lưu trữ tọa độ Không gian
+export interface CornerPhotoWithLocation {
+  fileData: FileData;
+  x: number; // Tọa độ X trên mặt bằng (%)
+  y: number; // Tọa độ Y trên mặt bằng (%)
+  rotation: number; // Hướng nhìn Camera (độ)
+}
 
+// Cập nhật PanoramicAxoState
+export interface PanoramicAxoState {
+  floorPlan: FileData | null; // MỚI: Ảnh Mặt Bằng
+  perspectivePhotos: CornerPhotoWithLocation[]; // THAY ĐỔI: Chuyển từ mảng FileData sang mảng có tọa độ
+  resultImage: string | null;
+  aiReasoning: string | null;
+  isLoading: boolean;
+  error: string | null;
+}
+
+export interface PanoramicAxoProps {
+  state: PanoramicAxoState;
+  onStateChange: (newState: Partial<PanoramicAxoState>) => void;
+  userCredits: number;
+  onDeductCredits?: (cost: number, description: string) => Promise<void>;
+  onReset: () => void;
+}
 
 // Support for EventAxonometric.tsx (Single Image + Text flow)
 export interface EventAxonometricState {

@@ -11,6 +11,7 @@ import AdvancedEdit from './components/AdvancedEdit';
 import { SketchConverter } from './components/SketchConverter';
 import { IdeaGenerator } from './components/IdeaGenerator';
 import { AxonometricTool } from './components/AxonometricTool';
+import { PanoramicAxoTool } from './components/PanoramicAxoTool';
 import { ViewSyncTool } from './components/ViewSyncTool';
 import { VideoGenerator } from './components/VideoGenerator';
 import { VideoSequenceGenerator } from './components/VideoSequenceGenerator';
@@ -100,7 +101,15 @@ const App: React.FC = () => {
     error: null,
   });
 
-
+  // State for Panoramic Axonometric Tool (New)
+  const [panoramicState, setPanoramicState] = useState<PanoramicAxoState>({
+    floorPlan: null,
+    perspectivePhotos: [],
+    resultImage: null,
+    aiReasoning: null,
+    isLoading: false,
+    error: null,
+  });
 
   // State for View Sync Tool (New)
   const [viewSyncState, setViewSyncState] = useState<ViewSyncState>({
@@ -258,7 +267,16 @@ const App: React.FC = () => {
     });
   };
 
-
+  const resetPanoramicTab = () => {
+    setPanoramicState({
+      floorPlan: null,
+      perspectivePhotos: [],
+      resultImage: null,
+      aiReasoning: null,
+      isLoading: false,
+      error: null,
+    });
+  };
 
   const resetViewSyncTab = () => {
     setViewSyncState({
@@ -367,7 +385,11 @@ const App: React.FC = () => {
                         label: 'Render 3D', 
                         icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                     },
-
+                    {
+                        id: Tool.PANORAMIC_AXO, 
+                        label: 'Toàn Cảnh 3D',
+                        icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    },
                     {
                         id: Tool.VIEW_SYNC, // New Tool
                         label: 'Đồng Bộ View',
@@ -725,7 +747,15 @@ const App: React.FC = () => {
           </div>
         )}
 
-
+        {activeTool === Tool.PANORAMIC_AXO && (
+          <PanoramicAxoTool
+            state={panoramicState}
+            onStateChange={(newState) => setPanoramicState(prev => ({ ...prev, ...newState }))}
+            userCredits={userCredits}
+            onDeductCredits={handleDeductCredits}
+            onReset={resetPanoramicTab}
+          />
+        )}
 
         {activeTool === Tool.AXONOMETRIC && (
           <AxonometricTool 

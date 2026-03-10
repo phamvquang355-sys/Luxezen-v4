@@ -36,31 +36,14 @@ export const generateVideoFromImage = async (
     const imageBytes = matches[2];
 
     // Helper function for retry logic
-    const generateVideosWithRetry = async (params: any, retries: number = 5, delay: number = 4000): Promise<any> => {
+    const generateVideosWithRetry = async (params: any, retries: number = 3, delay: number = 2000): Promise<any> => {
       try {
         return await ai.models.generateVideos(params);
       } catch (error: any) {
         if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes("503") || error?.message?.includes("overloaded"))) {
-          const jitter = Math.random() * 1000;
-          const waitTime = delay + jitter;
-          console.warn(`Veo API 503 error (generate). Retrying in ${Math.round(waitTime)}ms... (${retries} retries left)`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          console.warn(`Veo API 503 error. Retrying in ${delay}ms... (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, delay));
           return generateVideosWithRetry(params, retries - 1, delay * 2);
-        }
-        throw error;
-      }
-    };
-
-    const getVideosOperationWithRetry = async (params: any, retries: number = 5, delay: number = 4000): Promise<any> => {
-      try {
-        return await ai.operations.getVideosOperation(params);
-      } catch (error: any) {
-        if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes("503") || error?.message?.includes("overloaded"))) {
-          const jitter = Math.random() * 1000;
-          const waitTime = delay + jitter;
-          console.warn(`Veo API 503 error (poll). Retrying in ${Math.round(waitTime)}ms... (${retries} retries left)`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          return getVideosOperationWithRetry(params, retries - 1, delay * 2);
         }
         throw error;
       }
@@ -88,7 +71,7 @@ export const generateVideoFromImage = async (
     // Poll for completion
     while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5 seconds
-      operation = await getVideosOperationWithRetry({ operation: operation });
+      operation = await ai.operations.getVideosOperation({ operation: operation });
       console.log("Polling status:", operation.metadata?.state);
     }
 

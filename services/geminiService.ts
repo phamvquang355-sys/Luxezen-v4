@@ -14,17 +14,15 @@ const WEDDING_MATERIALS_KEYWORDS = {
 async function generateContentWithRetry(
   ai: GoogleGenAI,
   params: any,
-  retries: number = 5,
-  delay: number = 4000
+  retries: number = 3,
+  delay: number = 2000
 ): Promise<any> {
   try {
     return await ai.models.generateContent(params);
   } catch (error: any) {
     if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes("503") || error?.message?.includes("overloaded"))) {
-      const jitter = Math.random() * 1000; // Add up to 1s jitter
-      const waitTime = delay + jitter;
-      console.warn(`Gemini API 503 error. Retrying in ${Math.round(waitTime)}ms... (${retries} retries left)`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      console.warn(`Gemini API 503 error. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
       return generateContentWithRetry(ai, params, retries - 1, delay * 2);
     }
     throw error;

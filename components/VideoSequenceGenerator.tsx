@@ -1,7 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Plus, Trash2, Film, PlayCircle, Loader2, CheckCircle, AlertCircle, Combine, Download } from 'lucide-react';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import React, { useState } from 'react';
+import { Plus, Trash2, Film, PlayCircle, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { VideoScene } from '../types';
 import { generateVideoFromImage } from '../services/externalVideoService'; 
 import { WEDDING_CAMERA_SHOTS } from '../constants/videoShots';
@@ -12,16 +10,6 @@ export const VideoSequenceGenerator: React.FC = () => {
   ]);
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
   const [globalProgress, setGlobalProgress] = useState({ current: 0, total: 0 });
-
-  // THÊM STATE CHO VIỆC GHÉP VIDEO
-  const [isMerging, setIsMerging] = useState(false);
-  const [mergedVideoUrl, setMergedVideoUrl] = useState<string | null>(null);
-  
-  // Khởi tạo FFmpeg
-  const ffmpegRef = useRef(new FFmpeg());
-
-  // Kiểm tra xem tất cả các cảnh đã render thành công chưa
-  const isAllScenesSuccess = scenes.length > 0 && scenes.every(scene => scene.status === 'success' && scene.videoUrl);
 
   // Thêm phân cảnh mới
   const handleAddScene = () => {
@@ -105,51 +93,6 @@ export const VideoSequenceGenerator: React.FC = () => {
     }
 
     setIsProcessingBatch(false);
-  };
-
-  // HÀM MỚI: XỬ LÝ GHÉP VIDEO BẰNG FFMPEG
-  const handleMergeVideos = async () => {
-    try {
-      setIsMerging(true);
-      const ffmpeg = ffmpegRef.current;
-      
-      // Load FFmpeg nếu chưa load
-      if (!ffmpeg.loaded) {
-        await ffmpeg.load();
-      }
-
-      // 1. Tải các video thành công vào bộ nhớ giả lập của FFmpeg
-      const successScenes = scenes.filter(s => s.status === 'success' && s.videoUrl);
-      let listFileContent = '';
-
-      for (let i = 0; i < successScenes.length; i++) {
-        const videoName = `vid${i}.mp4`;
-        // Tải video từ URL (Blob/Base64)
-        if (successScenes[i].videoUrl) {
-            await ffmpeg.writeFile(videoName, await fetchFile(successScenes[i].videoUrl!));
-            // Ghi tên file vào danh sách để FFmpeg biết cần ghép những gì
-            listFileContent += `file '${videoName}'\n`;
-        }
-      }
-
-      // Tạo một file .txt chứa danh sách các video cần ghép
-      await ffmpeg.writeFile('list.txt', listFileContent);
-
-      // 2. Chạy lệnh ghép video (Concatenate)
-      // Lệnh này nối các video lại mà không cần encode lại từ đầu (copy), nên cực kỳ nhanh
-      await ffmpeg.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'output.mp4']);
-
-      // 3. Đọc file kết quả và tạo URL cho người dùng tải xuống
-      const data = await ffmpeg.readFile('output.mp4');
-      const url = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: 'video/mp4' }));
-      
-      setMergedVideoUrl(url);
-    } catch (error) {
-      console.error("Lỗi khi ghép video:", error);
-      alert("Có lỗi xảy ra khi ghép video. Vui lòng thử lại!");
-    } finally {
-      setIsMerging(false);
-    }
   };
 
   return (
@@ -246,66 +189,27 @@ export const VideoSequenceGenerator: React.FC = () => {
         ))}
       </div>
 
-      {/* KHU VỰC ĐIỀU KHIỂN BÊN DƯỚI */}
-      <div className="flex flex-col gap-4 pt-4 border-t border-theme-gold/10">
-        <div className="flex justify-between items-center">
-          <button 
-            onClick={handleAddScene} 
-            disabled={isProcessingBatch || isMerging}
-            className="flex items-center gap-2 px-4 py-2 bg-theme-surface2 hover:bg-theme-gold/20 text-theme-text-main rounded-lg border border-theme-gold/20 transition-colors disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" /> Thêm cảnh quay
-          </button>
+      {/* Nút điều khiển */}
+      <div className="flex justify-between items-center pt-4 border-t border-theme-gold/10">
+        <button 
+          onClick={handleAddScene} 
+          disabled={isProcessingBatch || scenes.length >= 10} // Giới hạn 10 cảnh để an toàn
+          className="flex items-center gap-2 px-4 py-2 bg-theme-surface2 hover:bg-theme-gold/20 text-theme-text-main rounded-lg border border-theme-gold/20 transition-colors disabled:opacity-50"
+        >
+          <Plus className="w-4 h-4" /> Thêm cảnh quay
+        </button>
 
-          <div className="flex gap-3">
-            {/* Nút Render Từng Cảnh (Cũ) */}
-            <button 
-              onClick={handleGenerateSequence} 
-              disabled={isProcessingBatch || !scenes.some(s => s.image) || isMerging}
-              className="flex items-center gap-2 px-6 py-2 bg-theme-gold hover:bg-white text-theme-base font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-theme-gold/40"
-            >
-              {isProcessingBatch ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Đang render...</>
-              ) : (
-                <><PlayCircle className="w-5 h-5" /> Render các cảnh</>
-              )}
-            </button>
-
-            {/* NÚT MỚI: XUẤT HIỆN KHI ĐÃ RENDER XONG TẤT CẢ */}
-            {isAllScenesSuccess && (
-              <button 
-                onClick={handleMergeVideos} 
-                disabled={isMerging}
-                className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg shadow-lg shadow-emerald-500/30 transition-colors disabled:opacity-50"
-              >
-                {isMerging ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> Đang ghép nối phim...</>
-                ) : (
-                  <><Combine className="w-5 h-5" /> Ghép thành 1 Phim</>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* KẾT QUẢ VIDEO CUỐI CÙNG SAU KHI GHÉP */}
-        {mergedVideoUrl && (
-          <div className="mt-4 p-4 bg-theme-base rounded-xl border-2 border-emerald-500/50 flex flex-col items-center gap-4">
-            <h3 className="text-lg font-bold text-emerald-400">🎉 Phim Toàn Cảnh Của Bạn Đã Sẵn Sàng!</h3>
-            <video 
-              src={mergedVideoUrl} 
-              controls 
-              className="w-full max-w-2xl rounded-lg shadow-2xl"
-            />
-            <a 
-              href={mergedVideoUrl} 
-              download="Wedding_Full_Tour.mp4"
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold rounded-full transition-all transform hover:scale-105 shadow-lg"
-            >
-              <Download className="w-5 h-5" /> Tải Phim Về Máy
-            </a>
-          </div>
-        )}
+        <button 
+          onClick={handleGenerateSequence} 
+          disabled={isProcessingBatch || !scenes.some(s => s.image)}
+          className="flex items-center gap-2 px-6 py-3 bg-theme-gold hover:bg-white text-theme-base font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-theme-gold/40"
+        >
+          {isProcessingBatch ? (
+            <><Loader2 className="w-5 h-5 animate-spin" /> Đang render chuỗi video...</>
+          ) : (
+            <><PlayCircle className="w-5 h-5" /> Render toàn bộ</>
+          )}
+        </button>
       </div>
     </div>
   );
